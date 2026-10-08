@@ -21,10 +21,6 @@ resource "google_storage_bucket" "site" {
     not_found_page   = "index.html"
   }
 
-  versioning {
-    enabled = true
-  }
-
   labels = var.labels
 }
 

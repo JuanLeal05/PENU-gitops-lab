@@ -2,7 +2,4 @@ framework:
   - terraform
 compact: true
 quiet: true
-skip-check:
-  - CKV_GCP_114  # El bucket tiene que ser publico pues se trata de un un sitio web estatico, ese es su proposito.
-  - CKV_GCP_28   # Contradice el propósito del recurso, que es un sitio web estatico. Se requiere que sea publico.
-  - CKV_GCP_62   # Es un servicio que no se incluye dentro del alcance del laboratorio. Requiere un bucket aparte de los otros.
+skip-check: []
