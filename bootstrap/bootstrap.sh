@@ -78,15 +78,41 @@ gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" \
 POOL_ID=$(gcloud iam workload-identity-pools describe "$POOL" \
   --project="$PROJ_STATE" --location="global" --format="value(name)")
 
+# GitHub ahora emite el "sub" del JWT con identificadores numericos
+# (repo:USUARIO@ID/REPO@ID:...). Los leemos de la API publica para que la
+# condicion coincida exactamente. Se registran los dos formatos (con y sin
+# identificadores) por compatibilidad, igual que el script original de Azure.
+GH_JSON=$(curl -fsS "https://api.github.com/repos/${GH_USER}/${GH_REPO}") || {
+  echo "No encontre github.com/${GH_USER}/${GH_REPO}. Cree primero el repositorio (publico) y revise GH_USER y GH_REPO."
+  exit 1
+}
+OWNER=$(echo "$GH_JSON" | jq -r .owner.login); OWNER_ID=$(echo "$GH_JSON" | jq -r .owner.id)
+REPO=$(echo "$GH_JSON" | jq -r .name); REPO_ID=$(echo "$GH_JSON" | jq -r .id)
+
+PREFIX_ID="repo:${OWNER}@${OWNER_ID}/${REPO}@${REPO_ID}"
+PREFIX_NOMBRE="repo:${OWNER}/${REPO}"
+
 # Las cuatro "credenciales federadas": un binding por cada subject que
 # GitHub puede emitir. Nadie mas puede suplantar la cuenta de servicio.
-for SUBJ in "pull_request" "ref:refs/heads/main" "environment:dev" "environment:prod"; do
-  gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
-    --project="$PROJ_STATE" \
-    --role="roles/iam.workloadIdentityUser" \
-    --member="principal://iam.googleapis.com/${POOL_ID}/subject/repo:${GH_USER}/${GH_REPO}:${SUBJ}" \
-    >/dev/null
-  echo "   subject autorizado: repo:${GH_USER}/${GH_REPO}:${SUBJ}"
+# Se otorgan DOS roles por cada combinacion: workloadIdentityUser autoriza
+# quien puede intentar actuar como la identidad; serviceAccountTokenCreator
+# autoriza a pedir el token en si. Owner del proyecto NO incluye este
+# segundo permiso por defecto, asi que hay que concederlo explicitamente.
+for PREFIJO in "$PREFIX_ID" "$PREFIX_NOMBRE"; do
+  for SUBJ in "pull_request" "ref:refs/heads/main" "environment:dev" "environment:prod"; do
+    MEMBER="principal://iam.googleapis.com/${POOL_ID}/subject/${PREFIJO}:${SUBJ}"
+    gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+      --project="$PROJ_STATE" \
+      --role="roles/iam.workloadIdentityUser" \
+      --member="$MEMBER" \
+      >/dev/null
+    gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+      --project="$PROJ_STATE" \
+      --role="roles/iam.serviceAccountTokenCreator" \
+      --member="$MEMBER" \
+      >/dev/null
+    echo "   subject autorizado: ${PREFIJO}:${SUBJ}"
+  done
 done
 
 echo "6/6 Permisos minimos"
