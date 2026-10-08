@@ -1,0 +1,50 @@
+name: terraform-apply
+
+on:
+  push:
+    branches: [main]
+    paths: ["envs/**", "modules/**", "site/**"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_location: ${{ vars.AZURE_LOCATION }}
+  TF_VAR_owner: ${{ github.repository_owner }}
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1          # primero dev; prod espera a que dev termine
+      matrix:
+        env: [dev, prod]
+    environment: ${{ matrix.env }}   # prod exige aprobación manual
+    defaults:
+      run:
+        working-directory: envs/${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Init
+        run: >
+          terraform init -input=false
+          -backend-config="storage_account_name=${{ vars.TFSTATE_SA }}"
+      - name: Apply
+        run: terraform apply -auto-approve -input=false -lock-timeout=120s
+      - name: Publicar la URL del sitio
+        run: |
+          URL=$(terraform output -raw site_url)
+          echo "### ${{ matrix.env }}: $URL" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,42 @@
+name: destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escriba "destruir" para confirmar'
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_location: ${{ vars.AZURE_LOCATION }}
+  TF_VAR_owner: ${{ github.repository_owner }}
+
+jobs:
+  destroy:
+    if: inputs.confirmar == 'destruir'
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        env: [prod, dev]
+    environment: ${{ matrix.env }}
+    defaults:
+      run:
+        working-directory: envs/${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Init
+        run: >
+          terraform init -input=false
+          -backend-config="storage_account_name=${{ vars.TFSTATE_SA }}"
+      - name: Destroy
+        run: terraform destroy -auto-approve -input=false -lock-timeout=120s
