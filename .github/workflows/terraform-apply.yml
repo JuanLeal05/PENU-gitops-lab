@@ -35,6 +35,7 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: 'access_token'
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
