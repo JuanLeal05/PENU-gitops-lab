@@ -2,9 +2,9 @@ terraform {
   required_version = ">= 1.9"
 
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -13,12 +13,13 @@ terraform {
   }
 }
 
-provider "azurerm" {
-  features {}
+provider "google" {
+  project = var.project_id
+  region  = var.location
+}
 
-  # La identidad solo tiene permisos sobre grupos de recursos, no sobre la
-  # suscripción, así que no puede registrar proveedores de recursos.
-  resource_provider_registrations = "none"
+variable "project_id" {
+  type = string
 }
 
 variable "location" {
@@ -31,20 +32,20 @@ variable "owner" {
 
 variable "prefix" {
   type    = string
-  default = "lab5"
+  default = "lab6"
 }
 
 module "sitio" {
-  source              = "../../modules/static_site"
-  resource_group_name = "rg-gitops-dev"
-  location            = var.location
-  prefix              = var.prefix
-  environment         = "dev"
-  index_file          = "${path.root}/../../site/index.html"
+  source      = "../../modules/static_site"
+  project_id  = var.project_id
+  location    = var.location
+  prefix      = var.prefix
+  environment = "dev"
+  index_file  = "${path.root}/../../site/index.html"
 
-  tags = {
+  labels = {
     environment = "dev"
-    owner       = var.owner
+    owner       = lower(var.owner)
     course      = "pemu-2026"
   }
 }

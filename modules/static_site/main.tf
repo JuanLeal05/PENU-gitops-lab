@@ -1,5 +1,5 @@
 locals {
-  sa_name = "st${var.prefix}${var.environment}${random_string.suffix.result}"
+  bucket_name = "${var.prefix}-${var.environment}-${random_string.suffix.result}"
 }
 
 resource "random_string" "suffix" {
@@ -8,31 +8,33 @@ resource "random_string" "suffix" {
   special = false
 }
 
-resource "azurerm_storage_account" "site" {
-  name                            = local.sa_name
-  resource_group_name             = var.resource_group_name
-  location                        = var.location
-  account_tier                    = "Standard"
-  account_replication_type        = "LRS"
-  account_kind                    = "StorageV2"
-  min_tls_version                 = "TLS1_2"
-  allow_nested_items_to_be_public = false
-  tags                            = var.tags
+resource "google_storage_bucket" "site" {
+  name                        = local.bucket_name
+  project                     = var.project_id
+  location                    = var.location
+  force_destroy               = true
+  uniform_bucket_level_access = true
+  public_access_prevention    = "inherited"
+
+  website {
+    main_page_suffix = "index.html"
+    not_found_page   = "index.html"
+  }
+
+  labels = var.labels
 }
 
-resource "azurerm_storage_account_static_website" "site" {
-  storage_account_id = azurerm_storage_account.site.id
-  index_document     = "index.html"
+resource "google_storage_bucket_iam_member" "publico" {
+  bucket = google_storage_bucket.site.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
 }
 
-resource "azurerm_storage_blob" "index" {
-  name                   = "index.html"
-  storage_account_name   = azurerm_storage_account.site.name
-  storage_container_name = "$web"
-  type                   = "Block"
-  content_type           = "text/html"
-  source                 = var.index_file
-  content_md5            = filemd5(var.index_file)
+resource "google_storage_bucket_object" "index" {
+  name         = "index.html"
+  bucket       = google_storage_bucket.site.name
+  source       = var.index_file
+  content_type = "text/html"
 
-  depends_on = [azurerm_storage_account_static_website.site]
+  depends_on = [google_storage_bucket_iam_member.publico]
 }

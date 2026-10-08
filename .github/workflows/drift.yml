@@ -2,21 +2,13 @@ name: drift
 
 on:
   schedule:
-    - cron: "0 11 * * *"     # todos los días a las 06:00 hora de Bogotá
+    - cron: "0 11 * * *"     # todos los dias a las 06:00 hora de Bogota
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
   issues: write
-
-env:
-  ARM_USE_OIDC: "true"
-  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-  TF_VAR_location: ${{ vars.AZURE_LOCATION }}
-  TF_VAR_owner: ${{ github.repository_owner }}
 
 jobs:
   drift:
@@ -25,16 +17,24 @@ jobs:
       fail-fast: false
       matrix:
         env: [dev, prod]
+    env:
+      TF_VAR_location: ${{ vars.GCP_REGION }}
+      TF_VAR_owner: ${{ github.repository_owner }}
+      TF_VAR_project_id: ${{ matrix.env == 'dev' && vars.GCP_PROJECT_DEV || vars.GCP_PROJECT_PROD }}
     defaults:
       run:
         working-directory: envs/${{ matrix.env }}
     steps:
       - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
       - uses: hashicorp/setup-terraform@v3
       - name: Init
         run: >
           terraform init -input=false
-          -backend-config="storage_account_name=${{ vars.TFSTATE_SA }}"
+          -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}"
       - name: Plan (detecta deriva)
         id: plan
         continue-on-error: true

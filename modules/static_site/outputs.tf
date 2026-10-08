@@ -1,3 +1,3 @@
 output "site_url" {
-  value = azurerm_storage_account.site.primary_web_endpoint
+  value = "https://storage.googleapis.com/${google_storage_bucket.site.name}/index.html"
 }
